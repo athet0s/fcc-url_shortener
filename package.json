@@ -11,7 +11,9 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.16.2"
+    "express": "^4.16.2",
+    "mongodb": "*",
+    "shortid": "*"
   },
   "engines": {
     "node": "8.x"
