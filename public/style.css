@@ -15,7 +15,6 @@ body {
 
 h1 {
   font-weight: bold;
-  color: pink;
 }
 
 .bold {
@@ -79,4 +78,15 @@ footer > a {
 
 .nicejob {
   text-decoration: line-through;
+}
+#response_cont{
+  font-size: 14px;
+}
+
+.resp_key{
+  color: rgb(0, 116, 232);
+  margin-right: 2em;
+}
+.resp_val{
+  color: rgb(221, 0, 169);
 }
