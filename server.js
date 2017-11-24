@@ -8,7 +8,7 @@ var mongo = require('mongodb').MongoClient;
 var shortid = require('shortid');
 var dbUrl = 'mongodb://' 
             + process.env.USER + ':' 
-            + process.env.PASS + '@' 
+            + process.env.PASS + '@'
             + process.env.HOST + ':' 
             + process.env.DB_PORT + '/' 
             + process.env.DB;
@@ -20,33 +20,47 @@ app.get("/", function (req, res) {
   res.sendFile(__dirname + '/views/index.html');
 });
 
-
-
-var shortUrl = function (url, urls, dest){
-  var result = {};
-  
-  var regex = /^http(s*):\/\/(\w[\w-\.@]*)\.([a-zA-Z]{2,}($|\/|\?))/;
-  if( regex.test(url)){
-    var id = shortid.generate();  
-    dbPutUrl(dbUrl, mongo, {_id: id, url: url});
-    result.original_url = url;
-    result.short_url = dest + id;
-  } else{
-    result.error = 'Wrong url format, make sure you have a valid protocol and real site.';
-  }
-  return result;
+var handleShortUrlReq = function (req, res, url, mongo) {
+  var dest = req.protocol + '://' + req.get('host') + '/';
+  shortUrl(url, mongo, dest).then( (result) => {
+    res.json(result);
+    res.end();
+  });
 }
 
-var dbPutUrl = function (dbUrl, mongo, doc){
-  mongo.connect(dbUrl , function(err, db) {
-    if (err) {
+var shortUrl = function (url, mongo, dest){
+  var result = {};
+  var regex = /^http(s*):\/\/(\w[\w-\.@]*)\.([a-zA-Z]{2,}($|\/|\?|:))/;
+  if( regex.test(url)){
+    var id = shortid.generate();  
+    var prom = dbPutUrl(dbUrl, mongo, {_id: id, url: url}).then( (ok) => {
+      if (ok){
+        result.original_url = url;
+        result.short_url = dest + id;
+      }
+      return result;
+    }, (err) => {
       console.log(err);
-    }
-    var colle = db.collection('short_urls');
-    colle.insertOne(doc, (err) => {
-      if (err) console.log(err);
+      return result.error = 'database error';
+    });
+  } else{
+    result.error = 'Wrong url format, make sure you have a valid protocol and real site.';
+    var prom = Promise.resolve( result);
+  }
+  return prom;
+}
+
+
+var dbPutUrl = function (dbUrl, mongo, doc){
+  return  mongo.connect(dbUrl)
+    .then( (db) => {
+    var ok = db.collection('short_urls')
+    .insertOne(doc)
+    .then( (data) => {
       db.close();
-    });    
+      return data.result.ok;
+    });
+    return ok;  
   });
 }
 
@@ -58,49 +72,47 @@ var dbGetUrl = function (dbUrl, mongo, id){
     db.close();
     return arr;
   }).then( (arr) =>{
+    if (arr.length === 0){
+      return 0;
+    }
     return arr[0].url;
   }, console.log );
 }
 
-
-
 app.get('/get/*', function (req, res){
   var url = req.originalUrl.slice(5, req.originalUrl.length);
-  var dest = req.protocol + '://' + req.get('host') + '/';
-  res.json( shortUrl(url, urls, dest));
+  handleShortUrlReq (req, res, url, mongo);
 });
 
 app.post("/", function (req, res) {
   var url = req.query.href;
-  var dest = req.protocol + '://' + req.get('host') + '/';
-  res.json( shortUrl(url, urls, dest));
-  //res.sendStatus(200);
+  handleShortUrlReq (req, res, url, mongo);
 });
 
 app.get("/*", function (req, res) {
   var param = req.originalUrl.slice(1, req.originalUrl.length);
   if( shortid.isValid(param)){
       dbGetUrl(dbUrl, mongo, param).then( (data) => {
-        console.log(data)
-        res.redirect(data);
+        if (data === 0){
+          res.json( { error: "This url is not on the database."});
+          res.end();
+        } else {
+          res.redirect(data);                 
+        }
+      }, (err) => {
+          console.log(err);
+          res.json( { error: "database error"});
+          res.end();
       });
   } else{
-    res.json({
-      error: "This url is not on the database."
-    });
+    res.json({ error: "Invalid URL id" });
+    res.end();
   }
 });
 
-// could also use the POST body instead of query string: http://expressjs.com/en/api.html#req.body
-
-// Simple in-memory store for now
-var urls = ['https://www.google.ru'];
 
 // listen for requests :)
 var listener = app.listen(process.env.PORT, function () {
   console.log('Your app is listening on port ' + listener.address().port);
 });
 
-
-
-//remade putUrl with promises, made script react to database errors
