@@ -19,10 +19,10 @@ $(function() {
   $('form').submit(function(event) {
     event.preventDefault();
     var href = $('input').val();
+    $('input').val('');
+    $('input').focus();
     $.post('?' + $.param({href: href}), function(data) {
       formatResp(data, $('#response_cont'));
-      $('input').val('');
-      $('input').focus();
     });
   });
 
